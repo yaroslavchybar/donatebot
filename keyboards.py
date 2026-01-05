@@ -44,8 +44,11 @@ def get_language_keyboard():
 
 def get_currency_keyboard(enabled: list[str] | None = None):
     enabled_currencies = enabled if enabled is not None else db.get_enabled_donation_currencies()
+    # Only show currencies that have active cards
+    currencies_with_cards = set(db.get_currencies_with_active_cards())
+    available_currencies = [c for c in enabled_currencies if c in currencies_with_cards]
     rows = []
-    for code in enabled_currencies:
+    for code in available_currencies:
         if code == "UAH":
             text = "🇺🇦 UAH"
         elif code == "RUB":

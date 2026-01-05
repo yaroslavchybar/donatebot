@@ -96,6 +96,17 @@ async def _start_donation(
     if referrer_id is None:
         await message.answer(t_for(user_id, "REFERRAL_REQUIRED"))
         return
+
+    # Check for active card BEFORE creating transaction
+    card_info = db.get_next_active_card(currency)
+    if not card_info:
+        await state.clear()
+        await message.answer(
+            t_for(user_id, "NO_CARD_FOR_CURRENCY", currency=currency),
+            reply_markup=get_main_menu(get_user_lang(user_id), is_admin=_is_admin(user_id)),
+        )
+        return
+
     transaction_id = db.create_transaction(user_id, amount, referrer_id, currency)
     if not transaction_id:
         await message.answer(t_for(user_id, "TRANSACTION_FAILED"))
@@ -103,11 +114,6 @@ async def _start_donation(
 
     await state.update_data(current_transaction_id=transaction_id, donation_amount=amount, currency=currency)
 
-    card_info = db.get_next_active_card(currency)
-    if not card_info:
-        card_block = t_for(user_id, "NO_CARD_FOR_CURRENCY", currency=currency)
-    else:
-        card_block = card_info
     lang = get_user_lang(user_id)
 
     currency_symbols = {"USD": "$", "UAH": "₴", "RUB": "₽"}
@@ -119,7 +125,7 @@ async def _start_donation(
     await message.answer(
         t_for(user_id, "DONATION_INIT_HEADER", amount=formatted_amount, referrer_text=referrer_text) + "\n\n" +
         f"{t_for(user_id,'TRANSFER_HEADER',amount=formatted_amount)}\n\n"
-        f"<code>{card_block}</code>\n\n"
+        f"<code>{card_info}</code>\n\n"
         f"{t_for(user_id,'TAP_TO_COPY')}\n"
         f"<b>{t_for(user_id,'UPLOAD_RECEIPT')}</b>",
         parse_mode="HTML",
@@ -211,7 +217,9 @@ async def start_handler(message: Message, command: CommandObject, state: FSMCont
             # Ask for currency instead of starting immediately
             await state.update_data(donation_amount=amount, referrer_id=referrer_id)
             enabled = db.get_enabled_donation_currencies()
-            if not enabled:
+            currencies_with_cards = set(db.get_currencies_with_active_cards())
+            available = [c for c in enabled if c in currencies_with_cards]
+            if not available:
                 await state.clear()
                 await message.answer(
                     t_for(user.id, "NO_CURRENCIES_ENABLED"),
@@ -317,7 +325,9 @@ async def donate_to_referrer_callback(callback: CallbackQuery, state: FSMContext
     await state.update_data(referrer_id=ref_id)
     db.set_user_preferred_referrer(callback.from_user.id, ref_id)
     enabled = db.get_enabled_donation_currencies()
-    if not enabled:
+    currencies_with_cards = set(db.get_currencies_with_active_cards())
+    available = [c for c in enabled if c in currencies_with_cards]
+    if not available:
         await state.clear()
         await callback.message.answer(
             t_for(callback.from_user.id, "NO_CURRENCIES_ENABLED"),
@@ -407,7 +417,9 @@ async def language_selected_callback(callback: CallbackQuery, state: FSMContext,
             else:
                 await state.update_data(donation_amount=amount, referrer_id=referrer_id)
                 enabled = db.get_enabled_donation_currencies()
-                if not enabled:
+                currencies_with_cards = set(db.get_currencies_with_active_cards())
+                available = [c for c in enabled if c in currencies_with_cards]
+                if not available:
                     await state.clear()
                     await callback.message.answer(
                         t_for(user_id, "NO_CURRENCIES_ENABLED"),
