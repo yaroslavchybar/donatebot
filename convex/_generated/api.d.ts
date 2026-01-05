@@ -10,6 +10,7 @@
 
 import type * as cards from "../cards.js";
 import type * as meta from "../meta.js";
+import type * as migrations from "../migrations.js";
 import type * as settings from "../settings.js";
 import type * as transactions from "../transactions.js";
 import type * as users from "../users.js";
@@ -23,6 +24,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   cards: typeof cards;
   meta: typeof meta;
+  migrations: typeof migrations;
   settings: typeof settings;
   transactions: typeof transactions;
   users: typeof users;

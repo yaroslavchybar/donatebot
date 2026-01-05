@@ -10,7 +10,15 @@ export default defineSchema({
     preferred_referrer_id: v.union(v.number(), v.null()),
     joined_at: v.string(),
     joined_at_ms: v.number(),
+    total_donated: v.optional(v.number()), // Aggregated stats
   }).index("by_user_id", ["user_id"]),
+
+  aggregates: defineTable({
+    key: v.string(), // e.g. "stats"
+    total_raised: v.number(),
+    total_donors: v.number(),
+    pending_reviews: v.number(),
+  }).index("by_key", ["key"]),
 
   transactions: defineTable({
     tx_id: v.number(),

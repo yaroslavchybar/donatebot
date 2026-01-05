@@ -29,6 +29,10 @@ async def main():
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     dp = Dispatcher(storage=MemoryStorage())
+    
+    # Register global middleware to ensure language is cached
+    from middlewares import LanguageMiddleware
+    dp.update.outer_middleware(LanguageMiddleware())
 
     register_user_handlers(dp)
     register_admin_handlers(dp)

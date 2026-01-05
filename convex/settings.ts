@@ -1,13 +1,18 @@
 import { mutation, query } from "./_generated/server";
+import type { DatabaseReader, DatabaseWriter } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 import { v } from "convex/values";
 
 const SUPPORTED_CURRENCIES = ["UAH", "RUB", "USD"];
 const DONATION_ENABLED_CURRENCIES_KEY = "donation_enabled_currencies";
 
-const getSettingDoc = async (db: any, key: string) => {
+const getSettingDoc = async (
+  db: DatabaseReader | DatabaseWriter,
+  key: string,
+): Promise<Doc<"settings"> | null> => {
   return await db
     .query("settings")
-    .withIndex("by_key", (q: any) => q.eq("key", key))
+    .withIndex("by_key", (q) => q.eq("key", key))
     .unique();
 };
 
@@ -109,4 +114,3 @@ export const isDonationCurrencyEnabled = query({
     return values.includes(ccy);
   },
 });
-

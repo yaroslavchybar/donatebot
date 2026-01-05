@@ -56,10 +56,19 @@ export const get = query({
 });
 
 export const listAllUserIds = query({
-  args: {},
-  handler: async ({ db }) => {
-    const users = await db.query("users").collect();
-    return users.map((u) => u.user_id);
+  args: {
+    paginationOpts: v.object({
+      numItems: v.number(),
+      cursor: v.union(v.string(), v.null()),
+    })
+  },
+  handler: async ({ db }, { paginationOpts }) => {
+    const users = await db.query("users").paginate(paginationOpts);
+    return {
+      users: users.page.map((u) => u.user_id),
+      continueCursor: users.continueCursor,
+      isDone: users.isDone,
+    };
   },
 });
 

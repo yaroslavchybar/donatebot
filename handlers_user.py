@@ -8,7 +8,11 @@ from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
     Message,
+    ReplyKeyboardRemove,
 )
 from aiogram.fsm.context import FSMContext
 
@@ -254,6 +258,13 @@ async def _send_profile(message: Message, bot: Bot, user_id: int, full_name: str
 async def start_handler(message: Message, command: CommandObject, state: FSMContext, bot: Bot):
     user = message.from_user
     await db.add_user(user.id, user.username, user.first_name)
+    
+    # Clean up any legacy reply keyboards
+    try:
+        msg = await message.answer("...", reply_markup=ReplyKeyboardRemove())
+        await msg.delete()
+    except Exception:
+        pass
     
     # Fetch user language - returns None if new user
     user_lang = await fetch_user_lang(user.id)

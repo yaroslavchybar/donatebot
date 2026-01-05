@@ -79,8 +79,24 @@ class Database:
         )
 
     async def get_all_users(self) -> list[int]:
-        rows = await self.query("users:listAllUserIds", {})
-        return [int(x) for x in (rows or [])]
+        all_ids = []
+        cursor = None
+        while True:
+            resp = await self.query(
+                "users:listAllUserIds",
+                {
+                    "paginationOpts": {
+                        "numItems": 100,
+                        "cursor": cursor,
+                    }
+                },
+            )
+            users_page = resp.get("users", [])
+            all_ids.extend([int(u) for u in users_page])
+            if resp.get("isDone"):
+                break
+            cursor = resp.get("continueCursor")
+        return all_ids
 
     async def create_transaction(self, user_id: int, amount: float, referrer_id: int | None = None, currency: str = "USD") -> int | None:
         tx_id = await self.mutation(
