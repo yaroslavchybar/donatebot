@@ -2,7 +2,10 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
+
 from config import BOT_TOKEN
 from handlers_admin import register_admin_handlers
 from handlers_user import register_user_handlers
@@ -11,21 +14,32 @@ import database as db
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
+
+
 async def main():
     if not BOT_TOKEN:
         print("Error: BOT_TOKEN not found in .env file.")
         exit(1)
 
-    db.init_db()
+    await db.init_db()
 
-    bot = Bot(token=BOT_TOKEN)
+    # Use DefaultBotProperties for default settings (aiogram 3.24 best practice)
+    bot = Bot(
+        token=BOT_TOKEN,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
     dp = Dispatcher(storage=MemoryStorage())
 
     register_user_handlers(dp)
     register_admin_handlers(dp)
 
     print("Bot is running...")
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        # Properly close the bot session
+        await bot.session.close()
+
 
 if __name__ == '__main__':
     try:

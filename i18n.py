@@ -97,6 +97,7 @@ TRANSLATIONS = {
         "BTN_REJECT": "❌ Reject",
         "APPROVED_LABEL": "✅ <b>APPROVED</b>",
         "REJECTED_LABEL": "❌ <b>REJECTED</b>",
+        "BACK": "Back",
     },
     "ru": {
         "SELECT_LANGUAGE_PROMPT": "Пожалуйста, выберите язык",
@@ -192,6 +193,7 @@ TRANSLATIONS = {
         "BTN_REJECT": "❌ Отклонить",
         "APPROVED_LABEL": "✅ <b>ОДОБРЕНО</b>",
         "REJECTED_LABEL": "❌ <b>ОТКЛОНЕНО</b>",
+        "BACK": "Назад",
     },
     "uk": {
         "SELECT_LANGUAGE_PROMPT": "Будь ласка, оберіть мову",
@@ -289,17 +291,43 @@ TRANSLATIONS = {
         "BTN_REJECT": "❌ Відхилити",
         "APPROVED_LABEL": "✅ <b>СХВАЛЕНО</b>",
         "REJECTED_LABEL": "❌ <b>ВІДХИЛЕНО</b>",
+        "BACK": "Назад",
     },
 }
 
+# In-memory cache for user languages (avoids async calls everywhere)
+_user_lang_cache: dict[int, str] = {}
+
+
 def get_user_lang(user_id: int) -> str:
-    lang = db.get_user_language(user_id)
-    return lang if lang in LANGS else "en"
+    """Get user language from cache. Falls back to 'en' if not cached."""
+    return _user_lang_cache.get(user_id, "en")
+
+
+async def fetch_user_lang(user_id: int) -> str:
+    """Fetch user language from database and cache it."""
+    lang = await db.get_user_language(user_id)
+    lang = lang if lang in LANGS else "en"
+    _user_lang_cache[user_id] = lang
+    return lang
+
+
+def set_cached_user_lang(user_id: int, lang: str) -> None:
+    """Set user language in cache (call after setting in DB)."""
+    if lang in LANGS:
+        _user_lang_cache[user_id] = lang
 
 
 def t_for(user_id: int, key: str, **kwargs) -> str:
+    """Translate for user using cached language."""
     lang = get_user_lang(user_id)
-    text = TRANSLATIONS[lang][key]
+    text = TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key)
+    return text.format(**kwargs) if kwargs else text
+
+
+def t(lang: str, key: str, **kwargs) -> str:
+    """Translate using a known language."""
+    text = TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key)
     return text.format(**kwargs) if kwargs else text
 
 
