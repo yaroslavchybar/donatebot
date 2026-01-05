@@ -1,4 +1,5 @@
 import logging
+import html
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.exceptions import TelegramBadRequest
@@ -150,7 +151,13 @@ async def _start_donation(
             await message.answer(text)
         return
 
-    await state.update_data(current_transaction_id=transaction_id, donation_amount=amount, currency=currency)
+    await state.update_data(
+        current_transaction_id=transaction_id,
+        donation_amount=amount,
+        currency=currency,
+        card_info=card_info,
+        recipient_id=referrer_id,
+    )
 
     lang = get_user_lang(user_id)
 
@@ -678,42 +685,80 @@ async def receive_proof_handler(message: Message, state: FSMContext, bot: Bot):
 
     await db.update_transaction_proof(transaction_id, file_id)
 
-    if ADMIN_ID:
-        try:
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text=t_for(ADMIN_ID, "BTN_APPROVE"), callback_data=f"approve_{transaction_id}"
-                        ),
-                        InlineKeyboardButton(
-                            text=t_for(ADMIN_ID, "BTN_REJECT"), callback_data=f"reject_{transaction_id}"
-                        ),
-                    ]
-                ]
-            )
-
+    try:
             tx_details = await db.get_transaction(transaction_id)
             if not tx_details:
                 await message.answer(t_for(message.from_user.id, "TRANSACTION_NOT_FOUND"))
                 await state.clear()
                 return
 
-            referrer_info = ""
-            if len(tx_details) > 6 and tx_details[6]:
-                referrer_id = tx_details[6]
-                referrer_info = t_for(ADMIN_ID, "REFERRED_BY_ID", referrer_id=referrer_id)
+            tx_amount = tx_details[2]
+            tx_currency = tx_details[3]
+            recipient_id = tx_details[7] if len(tx_details) > 7 else None
+            if recipient_id is None:
+                recipient_id = data.get("recipient_id") or data.get("referrer_id")
+            if recipient_id is None:
+                await message.answer(t_for(message.from_user.id, "TRANSACTION_NOT_FOUND"))
+                await state.clear()
+                return
+            recipient_id = int(recipient_id)
+
+            keyboard = InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text=t_for(recipient_id, "BTN_APPROVE"), callback_data=f"approve_{transaction_id}"
+                        ),
+                        InlineKeyboardButton(
+                            text=t_for(recipient_id, "BTN_REJECT"), callback_data=f"reject_{transaction_id}"
+                        ),
+                    ]
+                ]
+            )
+
+            currency_symbols = {"USD": "$", "UAH": "₴", "RUB": "₽"}
+            symbol = currency_symbols.get(tx_currency, tx_currency)
+            formatted_amount = f"{symbol} {float(tx_amount):,.2f}"
+
+            if user.username:
+                sender = f"@{user.username} (ID: {user.id})"
+            else:
+                sender = f"ID: {user.id}"
+            sender = html.escape(sender)
+
+            receiver = "N/A"
+            recipient = await db.get_user(recipient_id)
+            recipient_username = recipient[1] if recipient else None
+            if recipient_username:
+                receiver = f"@{recipient_username} (ID: {recipient_id})"
+            else:
+                receiver = f"ID: {recipient_id}"
+            receiver = html.escape(receiver)
+
+            raw_card_info = data.get("card_info")
+            if raw_card_info:
+                card = f"<code>{html.escape(str(raw_card_info))}</code>"
+            else:
+                card = "N/A"
 
             await bot.send_photo(
-                chat_id=ADMIN_ID,
+                chat_id=recipient_id,
                 photo=file_id,
-                caption=t_for(ADMIN_ID, "ADMIN_NEW_CLAIM_TITLE") + "\n\n" +
-                t_for(ADMIN_ID, "ADMIN_CLAIM_DETAILS", username=user.username, donor_id=user.id, amount=amount, tx_id=transaction_id, referrer_info=referrer_info),
+                caption=t_for(recipient_id, "ADMIN_NEW_CLAIM_TITLE") + "\n\n" +
+                t_for(
+                    recipient_id,
+                    "ADMIN_CLAIM_DETAILS",
+                    sender=sender,
+                    amount=formatted_amount,
+                    card=card,
+                    tx_id=transaction_id,
+                    receiver=receiver,
+                ),
                 parse_mode="HTML",
                 reply_markup=keyboard,
             )
-        except Exception as e:
-            logger.error(f"Failed to send to admin: {e}")
+    except Exception as e:
+        logger.error(f"Failed to send for confirmation: {e}")
 
     await message.answer(
         t_for(message.from_user.id, "RECEIPT_RECEIVED"),

@@ -398,24 +398,27 @@ async def stats_handler(message: Message):
 
 @router.callback_query(F.data.startswith(("approve_", "reject_")))
 async def admin_decision_handler(callback: CallbackQuery, bot: Bot):
-    # Admin is clicking, so we need admin's language for the button updates/responses to admin
-    admin_id = callback.from_user.id
+    reviewer_id = callback.from_user.id
     
     action, tx_id = callback.data.split("_")
     tx_id = int(tx_id)
 
     transaction = await db.get_transaction(tx_id)
     if not transaction:
-        await callback.answer(t_for(admin_id, "ALERT_TRANSACTION_NOT_FOUND"))
+        await callback.answer(t_for(reviewer_id, "ALERT_TRANSACTION_NOT_FOUND"))
         return
 
     user_id = transaction[1]
     amount = transaction[2]
+    recipient_id = transaction[7]
+    if recipient_id is None or int(recipient_id) != reviewer_id:
+        await callback.answer(t_for(reviewer_id, "ALERT_NOT_AUTHORIZED"), show_alert=True)
+        return
 
     if action == "approve":
         await db.update_transaction_status(tx_id, "approved")
         await callback.message.edit_caption(
-            caption=callback.message.caption + "\n\n" + t_for(admin_id, "APPROVED_LABEL"),
+            caption=callback.message.caption + "\n\n" + t_for(reviewer_id, "APPROVED_LABEL"),
             parse_mode="HTML",
             reply_markup=None,
         )
@@ -432,7 +435,7 @@ async def admin_decision_handler(callback: CallbackQuery, bot: Bot):
     elif action == "reject":
         await db.update_transaction_status(tx_id, "rejected")
         await callback.message.edit_caption(
-            caption=callback.message.caption + "\n\n" + t_for(admin_id, "REJECTED_LABEL"),
+            caption=callback.message.caption + "\n\n" + t_for(reviewer_id, "REJECTED_LABEL"),
             parse_mode="HTML",
             reply_markup=None,
         )

@@ -1,0 +1,6 @@
+services:
+  donatebot:
+    image: yaroslavchybar/donatebot:latest
+    restart: unless-stopped
+    env_file:
+      - .env
